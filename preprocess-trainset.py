@@ -48,6 +48,14 @@ lastClickInSession = testTmp.withColumn("last_click", clickudf(F.col("list_steps
 # udf to change reference into null if statement satisfied
 statementudf = F.udf(lambda s, ns, a, na, r: "null" if s == ns and a == na else r)
 # final join and replacement of columns in order to get proper format of the test set
-mytest = myPartialTest.join(lastClickInSession, ["session_id"], "left").withColumn("reference", statementudf(F.col("step"), F.col("newstep"), F.col("action_type"), F.col("newaction"), F.col("reference")))
-mytest.groupBy("reference").count().orderBy(F.col("count").desc()).show(100)
+mytest = myPartialTest.join(lastClickInSession, ["session_id"], "left").withColumn("reference", statementudf(F.col("step"), F.col("newstep"), F.col("action_type"), F.col("newaction"), F.col("reference"))).drop("newstep")
 
+# testing
+reftest = mytest.groupBy("reference").count().orderBy(F.col("count").desc()).first()[1] / mytest.count() * 100.0
+print(f"Null references take up to {reftest} % of all datapoints in the test set")
+
+actualtestdata = spark.read.csv("./data/test.csv", header=True)
+actualreftest = actualtestdata.groupBy("reference").count().orderBy(F.col("count").desc()).first()[1] / actualtestdata.count() * 100.0
+print(f"Whereas null references in the actual test dataset's take up to {actualreftest} % of the datapoints")
+
+assert abs(reftest - actualreftest) < 2.0
